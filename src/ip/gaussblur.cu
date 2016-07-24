@@ -21,11 +21,12 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 }
 
 __global__ void separateChannels(RGB_24* d_in, float* d_r, float* d_g, float* d_b, int numRows, int numCols) {
-    unsigned long toffset = threadIdx.x + threadIdx.y * numCols;
-    unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
-
+    
     if (blockIdx.x == (int) numCols/blockDim.x && threadIdx.x + blockIdx.x * blockDim.x >= numCols) return;
     else if (blockIdx.y == (int) numRows/blockDim.y && threadIdx.y + blockIdx.y * blockDim.y >= numRows) return;
+
+    unsigned long toffset = threadIdx.x + threadIdx.y * numCols;
+    unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
 
     unsigned long id = toffset + boffset;
 
@@ -35,11 +36,12 @@ __global__ void separateChannels(RGB_24* d_in, float* d_r, float* d_g, float* d_
 }
 
 __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int numRows, int numCols) {
-    unsigned long toffset = threadIdx.x + threadIdx.y * numCols;
-    unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
-
+    
     if (blockIdx.x == (int) numCols/blockDim.x && threadIdx.x + blockIdx.x * blockDim.x >= numCols) return;
     else if (blockIdx.y == (int) numRows/blockDim.y && threadIdx.y + blockIdx.y * blockDim.y >= numRows) return;
+    
+    unsigned long toffset = threadIdx.x + threadIdx.y * numCols;
+    unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
 
     unsigned long id = toffset + boffset;
     float r, g, b;

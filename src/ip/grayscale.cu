@@ -21,11 +21,12 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 }
 
 __global__ void convertToGrayscale(RGB_24* d_in, float* d_out, int numRows, int numCols) {
-    unsigned long toffset = threadIdx.x + threadIdx.y * numCols;
-    unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
 
     if (blockIdx.x == (int) numCols/blockDim.x && threadIdx.x + blockIdx.x * blockDim.x >= numCols) return;
     else if (blockIdx.y == (int) numRows/blockDim.y && threadIdx.y + blockIdx.y * blockDim.y >= numRows) return;
+    
+    unsigned long toffset = threadIdx.x + threadIdx.y * numCols;
+    unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
 
     unsigned long id = toffset + boffset;
     d_out[id] = float(d_in[id].r) * 0.2989f + float(d_in[id].g) * 0.587f + float(d_in[id].b) * 0.114f;
