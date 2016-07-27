@@ -44,6 +44,9 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
     unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
 
     unsigned long id = toffset + boffset;
+    __shared__ RGB_24* pixels[(blockDim.x + 2) * (blockDim.y + 2)];
+
+
     float r, g, b;
     if (id == 0) {
         r = 0.147761f * (float) d_r[id] + 0.118318f * ((float) d_r[id+1] + (float) d_r[id+numCols]) + 0.0947416f * (float) d_r[id+numCols+1];
