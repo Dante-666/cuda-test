@@ -44,10 +44,174 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
     unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
 
     unsigned long id = toffset + boffset;
-    __shared__ RGB_24* pixels[(blockDim.x + 2) * (blockDim.y + 2)];
+    //unsigned int dim = (blockDim.x + 2) * (blockDim.y + 2);
+    __shared__ RGB_24 pixels[34*34];
+    //unsigned long t_id = id;
+    unsigned int poffset = (blockDim.x + 2) * (threadIdx.y + 1) + threadIdx.x + 1;
+    pixels[poffset].r = d_r[id];
+    pixels[poffset].g = d_g[id];
+    pixels[poffset].b = d_b[id];
+    
+    if (id == 0) {
+        pixels[0].r = pixels[0].g = pixels[0].b = 0;
+        pixels[1].r = pixels[1].g = pixels[1].b = 0;
+        pixels[blockDim.x + 2].r = pixels[blockDim.x + 2].g = pixels[blockDim.x + 2].b = 0;
+    } else if (id == numCols - 1) {
+        int t_poffset = numCols - (blockDim.x * blockIdx.x);
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        pixels[t_poffset+1].r = pixels[t_poffset+1].g = pixels[t_poffset+1].b = 0;
+        pixels[t_poffset+34+1].r = pixels[t_poffset+34+1].g = pixels[t_poffset+34+1].b = 0;
+    } else if (id == numCols * (numRows - 1)) {
+        int t_poffset = (blockDim.x + 2) * (threadIdx.y + 1);
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset += blockDim.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset++;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+    } else if (id == numCols * numRows - 1) {
+        int t_poffset = (blockDim.x + 2) * (threadIdx.y + 1) + threadIdx.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset += blockDim.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset--;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+    } else if (id < numCols) {
+        int t_poffset = poffset + (blockDim.x + 2);
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+    } else if (id % numCols == 0) {
+        int t_poffset = poffset - 1;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+    } else if (id % numCols == numCols - 1) {
+        int t_poffset = poffset + 1;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+    } else if (id > numCols * (numRows - 1)) {
+        int t_poffset = poffset + blockDim.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+    } else if (toffset == 0) {
+        int t_poffset = poffset + 1;
+        int tid = id - 1;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+        
+        t_poffset -= (blockDim.x + 2);
+        tid = tid - numCols;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
 
+        t_poffset++;
+        tid++;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    } else if (toffset == blockDim.x - 1) {
+        int t_poffset = poffset + 1;
+        int tid = id + 1;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+        
+        t_poffset -= (blockDim.x + 2);
+        tid = tid - numCols;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+
+        t_poffset--;
+        tid--;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    } else if (toffset == blockDim.x * (blockDim.y - 1)) {
+        int t_poffset = poffset + 1;
+        int tid = id - 1;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+        
+        t_poffset += (blockDim.x + 2);
+        tid = tid + numCols;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+
+        t_poffset++;
+        tid++;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    } else if (toffset == blockDim.x * blockDim.y - 1) {
+        int t_poffset = poffset + 1;
+        int tid = id + 1;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+        
+        t_poffset += (blockDim.x + 2);
+        tid = tid + numCols;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+
+        t_poffset--;
+        tid--;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    } else if (toffset < blockDim.x) {
+        int t_poffset = poffset - (blockDim.x + 2);
+        int tid = id - numCols;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    } else if (threadIdx.x == 0) {
+        int t_poffset = poffset + 1;
+        int tid = id - 1;
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    } else if (threadIdx.y == blockDim.y - 1) {
+        int t_poffset = poffset + blockDim.x + 2;
+        int tid = id + numCols;    
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    } else if (threadIdx.x == blockDim.x - 1) {
+        int t_poffset = poffset + 1;
+        int tid = id + 1;    
+        pixels[t_poffset].r = d_r[tid];
+        pixels[t_poffset].g = d_g[tid];
+        pixels[t_poffset].b = d_b[tid];
+    }
+
+    __syncthreads();
 
     float r, g, b;
+    r = 0.147761f * float(pixels[poffset].r) +
+        0.118318f * (float(pixels[poffset+1].r) 
+                + float(pixels[poffset-1].r) 
+                + float(pixels[poffset+blockDim.x+2].r) 
+                + float(pixels[poffset-blockDim.x-2].r)) +
+        0.0947416f * (float(pixels[poffset+blockDim.x+3].r) 
+                + float(pixels[poffset+blockDim.x+1].r) 
+                + float(pixels[poffset-blockDim.x-3].r) 
+                + float(pixels[poffset-blockDim.x-1].r));
+    g = 0.147761f * float(pixels[poffset].g) +
+        0.118318f * (float(pixels[poffset+1].g) 
+                + float(pixels[poffset-1].g) 
+                + float(pixels[poffset+blockDim.x+2].g) 
+                + float(pixels[poffset-blockDim.x-2].g)) +
+        0.0947416f * (float(pixels[poffset+blockDim.x+3].g) 
+                + float(pixels[poffset+blockDim.x+1].g) 
+                + float(pixels[poffset-blockDim.x-3].g) 
+                + float(pixels[poffset-blockDim.x-1].g));
+    b = 0.147761f * float(pixels[poffset].b) +
+        0.118318f * (float(pixels[poffset+1].b) 
+                + float(pixels[poffset-1].b) 
+                + float(pixels[poffset+blockDim.x+2].b) 
+                + float(pixels[poffset-blockDim.x-2].b)) +
+        0.0947416f * (float(pixels[poffset+blockDim.x+3].b) 
+                + float(pixels[poffset+blockDim.x+1].b) 
+                + float(pixels[poffset-blockDim.x-3].b) 
+                + float(pixels[poffset-blockDim.x-1].b));
+    /*
     if (id == 0) {
         r = 0.147761f * (float) d_r[id] + 0.118318f * ((float) d_r[id+1] + (float) d_r[id+numCols]) + 0.0947416f * (float) d_r[id+numCols+1];
         g = 0.147761f * (float) d_g[id] + 0.118318f * ((float) d_g[id+1] + (float) d_g[id+numCols]) + 0.0947416f * (float) d_g[id+numCols+1];
@@ -99,7 +263,7 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
             0.0947416f * ((float) d_g[id-numCols-1] + (float) d_g[id-numCols+1] + (float) d_g[id+numCols-1] + (float) d_g[id+numCols+1]);
         b = 0.147761f * (float) d_b[id] + 0.118318f * ((float) d_b[id-1] + (float) d_b[id+1] + (float) d_b[id-numCols] + (float) d_b[id+numCols]) +
             0.0947416f * ((float) d_b[id-numCols-1] + (float) d_b[id-numCols+1] + (float) d_b[id+numCols-1] + (float) d_b[id+numCols+1]);
-    }
+    }*/
 
     d_out[id].r = r ; d_out[id].g = g ; d_out[id].b = b;
 }
