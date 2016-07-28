@@ -41,7 +41,7 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
     else if (blockIdx.y == (int) numRows/blockDim.y && threadIdx.y + blockIdx.y * blockDim.y >= numRows) return;
     
     unsigned long toffset = threadIdx.x + threadIdx.y * numCols;
-    unsigned long boffset = blockIdx.y * blockDim.x * numCols + blockDim.y * blockIdx.x;
+    unsigned long boffset = blockIdx.y * blockDim.y * numCols + blockDim.x * blockIdx.x;
 
     unsigned long id = toffset + boffset;
     //unsigned int dim = (blockDim.x + 2) * (blockDim.y + 2);
@@ -51,16 +51,23 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
     pixels[poffset].r = d_r[id];
     pixels[poffset].g = d_g[id];
     pixels[poffset].b = d_b[id];
+
+    int t_poffset = poffset;
     
     if (id == 0) {
-        pixels[0].r = pixels[0].g = pixels[0].b = 0;
-        pixels[1].r = pixels[1].g = pixels[1].b = 0;
-        pixels[blockDim.x + 2].r = pixels[blockDim.x + 2].g = pixels[blockDim.x + 2].b = 0;
-    } else if (id == numCols - 1) {
-        int t_poffset = numCols - (blockDim.x * blockIdx.x);
+        t_poffset--;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
-        pixels[t_poffset+1].r = pixels[t_poffset+1].g = pixels[t_poffset+1].b = 0;
-        pixels[t_poffset+34+1].r = pixels[t_poffset+34+1].g = pixels[t_poffset+34+1].b = 0;
+        t_poffset -= blockDim.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        t_poffset++;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+    } else if (id == numCols - 1) {
+        t_poffset++;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        t_poffset -= blockDim.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        t_poffset--;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (id == numCols * (numRows - 1)) {
         int t_poffset = (blockDim.x + 2) * (threadIdx.y + 1);
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset += blockDim.x + 2;
