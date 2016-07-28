@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <stdio.h>
+//#include <
 
 #include <FreeImage.h>
 
@@ -20,7 +21,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
     }
 }
 
-__global__ void separateChannels(RGB_24* d_in, float* d_r, float* d_g, float* d_b, int numRows, int numCols) {
+__global__ void separateChannels(RGB_24* d_in, unsigned char* d_r, unsigned char* d_g, unsigned char* d_b, int numRows, int numCols) {
     
     if (blockIdx.x == (int) numCols/blockDim.x && threadIdx.x + blockIdx.x * blockDim.x >= numCols) return;
     else if (blockIdx.y == (int) numRows/blockDim.y && threadIdx.y + blockIdx.y * blockDim.y >= numRows) return;
@@ -30,12 +31,12 @@ __global__ void separateChannels(RGB_24* d_in, float* d_r, float* d_g, float* d_
 
     unsigned long id = toffset + boffset;
 
-    d_r[id] = float(d_in[id].r);
-    d_g[id] = float(d_in[id].g);
-    d_b[id] = float(d_in[id].b);
+    d_r[id] = d_in[id].r;
+    d_g[id] = d_in[id].g;
+    d_b[id] = d_in[id].b;
 }
 
-__global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int numRows, int numCols) {
+__global__ void gaussBlur(RGB_24* d_out, unsigned char* d_r, unsigned char* d_g, unsigned char* d_b, int numRows, int numCols) {
     
     if (blockIdx.x == (int) numCols/blockDim.x && threadIdx.x + blockIdx.x * blockDim.x >= numCols) return;
     else if (blockIdx.y == (int) numRows/blockDim.y && threadIdx.y + blockIdx.y * blockDim.y >= numRows) return;
@@ -44,15 +45,14 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
     unsigned long boffset = blockIdx.y * blockDim.y * numCols + blockDim.x * blockIdx.x;
 
     unsigned long id = toffset + boffset;
-    //unsigned int dim = (blockDim.x + 2) * (blockDim.y + 2);
     __shared__ RGB_24 pixels[34*34];
-    //unsigned long t_id = id;
     unsigned int poffset = (blockDim.x + 2) * (threadIdx.y + 1) + threadIdx.x + 1;
     pixels[poffset].r = d_r[id];
     pixels[poffset].g = d_g[id];
     pixels[poffset].b = d_b[id];
 
-    int t_poffset = poffset;
+    unsigned int t_poffset = poffset;
+    unsigned long tid = id;
     
     if (id == 0) {
         t_poffset--;
@@ -69,36 +69,40 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
         t_poffset--;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (id == numCols * (numRows - 1)) {
-        int t_poffset = (blockDim.x + 2) * (threadIdx.y + 1);
-        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset += blockDim.x + 2;
-        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset++;
+        t_poffset--;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        t_poffset += blockDim.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        t_poffset++;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (id == numCols * numRows - 1) {
-        int t_poffset = (blockDim.x + 2) * (threadIdx.y + 1) + threadIdx.x + 2;
-        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset += blockDim.x + 2;
-        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0; t_poffset--;
+        t_poffset++;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        t_poffset += blockDim.x + 2;
+        pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
+        t_poffset--;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (id < numCols) {
-        int t_poffset = poffset + (blockDim.x + 2);
+        t_poffset -= blockDim.x + 2;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (id % numCols == 0) {
-        int t_poffset = poffset - 1;
+        t_poffset--;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (id % numCols == numCols - 1) {
-        int t_poffset = poffset + 1;
+        t_poffset++;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (id > numCols * (numRows - 1)) {
-        int t_poffset = poffset + blockDim.x + 2;
+        t_poffset += blockDim.x + 2;
         pixels[t_poffset].r = pixels[t_poffset].g = pixels[t_poffset].b = 0;
     } else if (toffset == 0) {
-        int t_poffset = poffset + 1;
-        int tid = id - 1;
+        t_poffset--;
+        tid--;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
         
-        t_poffset -= (blockDim.x + 2);
-        tid = tid - numCols;
+        t_poffset -= blockDim.x + 2;
+        tid -= numCols;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
@@ -109,14 +113,14 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
     } else if (toffset == blockDim.x - 1) {
-        int t_poffset = poffset + 1;
-        int tid = id + 1;
+        t_poffset++;
+        tid++;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
         
-        t_poffset -= (blockDim.x + 2);
-        tid = tid - numCols;
+        t_poffset -= blockDim.x + 2;
+        tid -= numCols;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
@@ -127,14 +131,14 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
     } else if (toffset == blockDim.x * (blockDim.y - 1)) {
-        int t_poffset = poffset + 1;
-        int tid = id - 1;
+        t_poffset--;
+        tid--;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
         
-        t_poffset += (blockDim.x + 2);
-        tid = tid + numCols;
+        t_poffset += blockDim.x + 2;
+        tid += numCols;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
@@ -145,14 +149,14 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
     } else if (toffset == blockDim.x * blockDim.y - 1) {
-        int t_poffset = poffset + 1;
-        int tid = id + 1;
+        t_poffset++;
+        tid++;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
         
         t_poffset += (blockDim.x + 2);
-        tid = tid + numCols;
+        tid += numCols;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
@@ -162,27 +166,27 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
-    } else if (toffset < blockDim.x) {
-        int t_poffset = poffset - (blockDim.x + 2);
-        int tid = id - numCols;
+    } else if (threadIdx.y == 0) {
+        t_poffset -= blockDim.x + 2;
+        tid -= numCols;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
     } else if (threadIdx.x == 0) {
-        int t_poffset = poffset + 1;
-        int tid = id - 1;
+        t_poffset--;
+        tid--;
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
     } else if (threadIdx.y == blockDim.y - 1) {
-        int t_poffset = poffset + blockDim.x + 2;
-        int tid = id + numCols;    
+        t_poffset += blockDim.x + 2;
+        tid += numCols;    
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
     } else if (threadIdx.x == blockDim.x - 1) {
-        int t_poffset = poffset + 1;
-        int tid = id + 1;    
+        t_poffset++;
+        tid++;    
         pixels[t_poffset].r = d_r[tid];
         pixels[t_poffset].g = d_g[tid];
         pixels[t_poffset].b = d_b[tid];
@@ -218,8 +222,8 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
                 + float(pixels[poffset+blockDim.x+1].b) 
                 + float(pixels[poffset-blockDim.x-3].b) 
                 + float(pixels[poffset-blockDim.x-1].b));
-    /*
-    if (id == 0) {
+    
+    /*if (id == 0) {
         r = 0.147761f * (float) d_r[id] + 0.118318f * ((float) d_r[id+1] + (float) d_r[id+numCols]) + 0.0947416f * (float) d_r[id+numCols+1];
         g = 0.147761f * (float) d_g[id] + 0.118318f * ((float) d_g[id+1] + (float) d_g[id+numCols]) + 0.0947416f * (float) d_g[id+numCols+1];
         b = 0.147761f * (float) d_b[id] + 0.118318f * ((float) d_b[id+1] + (float) d_b[id+numCols]) + 0.0947416f * (float) d_b[id+numCols+1];
@@ -273,6 +277,9 @@ __global__ void gaussBlur(RGB_24* d_out, float* d_r, float* d_g, float* d_b, int
     }*/
 
     d_out[id].r = r ; d_out[id].g = g ; d_out[id].b = b;
+    /*d_out[id].r = pixels[poffset].r; 
+    d_out[id].g = pixels[poffset].g;
+    d_out[id].b = pixels[poffset].b;*/
 }
 
 int main(int argc, char** argv) {
@@ -290,16 +297,16 @@ int main(int argc, char** argv) {
     RGB_24* h_in = new RGB_24[numRows * numCols];
     RGB_24* h_out = new RGB_24[numRows * numCols];
     RGB_24* d_in;
-    float* d_r;
-    float* d_g;
-    float* d_b;
+    unsigned char* d_r;
+    unsigned char* d_g;
+    unsigned char* d_b;
     RGB_24* d_out;
     
     gpuErrchk(cudaMalloc((void **) &d_in, sizeof(RGB_24) * numRows * numCols));
 
-    gpuErrchk(cudaMalloc((void **) &d_r, sizeof(float) * numRows * numCols));
-    gpuErrchk(cudaMalloc((void **) &d_g, sizeof(float) * numRows * numCols));
-    gpuErrchk(cudaMalloc((void **) &d_b, sizeof(float) * numRows * numCols));
+    gpuErrchk(cudaMalloc((void **) &d_r, sizeof(unsigned char) * numRows * numCols));
+    gpuErrchk(cudaMalloc((void **) &d_g, sizeof(unsigned char) * numRows * numCols));
+    gpuErrchk(cudaMalloc((void **) &d_b, sizeof(unsigned char) * numRows * numCols));
     
     FREE_IMAGE_TYPE type = FreeImage_GetImageType(immap);
     int i = 0;
@@ -315,7 +322,8 @@ int main(int argc, char** argv) {
             }
             bits += pitch;
         }
-    }
+    } 
+    
     gpuErrchk(cudaMemcpy(d_in, h_in, numRows * numCols * sizeof(RGB_24), cudaMemcpyHostToDevice));
     cudaEvent_t start, stop;
     float time;
@@ -324,7 +332,7 @@ int main(int argc, char** argv) {
 
     cudaEventRecord(start, 0);
     
-    cout<<ceil(numCols/32.0)<<" --- "<<ceil(numRows/32.0)<<endl;
+    cout<<sizeof(float)<<endl;
     separateChannels<<<dim3(ceil(numCols/32.0), ceil(numRows/32.0), 1), dim3(32, 32, 1)>>>(d_in, d_r, d_g, d_b, numRows, numCols);
     
     gpuErrchk(cudaMalloc((void **) &d_out, sizeof(RGB_24) * numRows * numCols));
@@ -348,8 +356,7 @@ int main(int argc, char** argv) {
     gpuErrchk(cudaFree(d_g));
     gpuErrchk(cudaFree(d_b));
     
-    
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 
     BYTE* bits = (BYTE*)FreeImage_GetBits(immap);
     i = 0;
@@ -366,7 +373,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    FreeImage_Save(FIF_JPEG, immap, "blur.jpeg", JPEG_DEFAULT);
+    FreeImage_Save(FIF_PNG, immap, "blur.png", JPEG_DEFAULT);
     FreeImage_DeInitialise();
 
     return 0; 
