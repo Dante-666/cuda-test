@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    FreeImage_Save(FIF_JPEG, immap, "blur.jpeg", JPEG_DEFAULT);
+    FreeImage_Save(FIF_PNG, immap, "blur.png", JPEG_DEFAULT);
     FreeImage_DeInitialise();
 
     return 0; 
